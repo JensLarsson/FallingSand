@@ -1,0 +1,46 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+RWStructuredBuffer<int> Test;
+RWStructuredBuffer<float> Density;
+RWStructuredBuffer<float2> Velocity;
+
+int Width;
+int Height;
+
+
+
+
+static float4 colourArray[] = {
+	float4(1,1,1,1),
+	float4(0,0,0,0),
+	float4(0,0,1,1),
+	float4(0,1,0,1),
+	float4(1,0,0,1),
+};
+
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+	float screenWidth, screenHeight;
+	Result.GetDimensions(screenWidth, screenHeight);
+	float scale = screenWidth / screenHeight;
+
+	float2 uv = (id / float2(screenWidth, screenHeight));
+	uv.x *= scale;
+
+	int2 UVi = uv * Height;
+	if (uv.x > 1 || uv.y > 1) {
+		Result[id.xy] = float4(0, 0, 0, 0);
+	}
+	else {
+		int i = UVi.y + UVi.x * Width;
+		Result[id.xy] = float4(Velocity[i].x, Velocity[i].y, Density[i], 1);
+		//Result[id.xy] = colourArray[Test[UVi.x + UVi.y * Width]];// == 1 ? float4(0, 0, 0, 0) : float4(1, 1, 1, 1);
+		//Result[id.xy] = float4(float2(UVi)/Width, 1, 1);
+	}
+}
