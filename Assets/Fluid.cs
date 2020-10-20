@@ -21,6 +21,8 @@ public class Fluid
 
 
     public float[] Density => density;
+    public float[] xVec => vx;
+    public float[] yVec => vy;
 
     public Fluid(int size, int diffusion, int viscocity, float deltaTime)
     {

@@ -18,14 +18,15 @@ public class Blipper : MonoBehaviour
 
     [SerializeField] int width = 512;
     [SerializeField] int height = 512;
+    [SerializeField] float viscocity = 1e-06f;
     NavierFluid fluid;
     private void Awake()
     {
         //simulation = new SandSimulation(width, height);
-        fluid = new NavierFluid(width, 0, 0.5f);
+        fluid = new NavierFluid(width, viscocity);
         Debug.Log(width);
         densityBuffer = new ComputeBuffer(width * width, sizeof(float));
-        velocityBuffer = new ComputeBuffer(width * width, sizeof(float)*2);
+        velocityBuffer = new ComputeBuffer(width * width, sizeof(float) * 2);
         densityBuffer.SetData(fluid.Density);
         velocityBuffer.SetData(fluid.Velocities);
         renderShader.SetBuffer(0, "Density", densityBuffer);
@@ -47,7 +48,7 @@ public class Blipper : MonoBehaviour
             {
                 for (int y = -2; y < 3; y++)
                 {
-                    Vector2 direction = (new Vector2(mousePos.x - previousMousePos.x, mousePos.y - previousMousePos.y) + EPSILON2).normalized*1;
+                    Vector2 direction = (new Vector2(mousePos.x - previousMousePos.x, mousePos.y - previousMousePos.y) + EPSILON2).normalized * 1;
                     fluid.AddDencity(Mathf.Clamp(mousePos.x + x, 0, width - 1), Mathf.Clamp(mousePos.y + y, 0, height - 1), 100);
                     fluid.AddVelocity(Mathf.Clamp(mousePos.x, 0, width - 1), Mathf.Clamp(mousePos.y, 0, height - 1), direction);
                 }
@@ -55,7 +56,7 @@ public class Blipper : MonoBehaviour
         }
         previousMousePos = mousePos;
         //if (Input.GetKeyDown(KeyCode.Space))
-        fluid.StepSimulation(0.033f);
+        fluid.StepSimulation(0.0033f);
         densityBuffer.SetData(fluid.Density);
         velocityBuffer.SetData(fluid.Velocities);
 

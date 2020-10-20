@@ -23,7 +23,7 @@ public class NavierFluid
 {
     int size;
     Vector2[][,] velocity;
-    float[,] pressure;
+    float[][,] pressure;
     float[,] density;
     float[,] divergence;
     float viscosity;
@@ -32,9 +32,11 @@ public class NavierFluid
     int WRITE = 1;
     const int velocityW = 2;
 
+    float time;
+
     public float[,] Density => density;
     public Vector2[,] Velocities => velocity[READ];
-    public NavierFluid(int size, float dens, float visc)
+    public NavierFluid(int size,  float visc)
     {
         this.size = size;
         this.viscosity = visc;
@@ -44,9 +46,10 @@ public class NavierFluid
             new Vector2[size,size],
             new Vector2[size,size]
         };
-        pressure =
-            new float[size, size];
-
+        pressure = new float[2][,] {
+            new float[size, size],
+            new float[size, size]
+        };
         density =
             new float[size, size];
         divergence = new float[size, size];
@@ -58,13 +61,11 @@ public class NavierFluid
             }
         }
     }
-    void SwapReadWrite(/*object[] array*/)
+    void SwapReadWrite(object[] array)
     {
-        READ = READ == 0 ? 1 : 0;
-        WRITE = WRITE == 0 ? 1 : 0;
-        //object temp = array[0];
-        //array[0] = array[1];
-        //array[1] = temp;
+        object temp = array[0];
+        array[0] = array[1];
+        array[1] = temp;
     }
     public void AddDencity(int x, int y, float amount)
     {
@@ -84,8 +85,8 @@ public class NavierFluid
 
     public void StepSimulation(float timeStep)
     {
-        //if (velocity[READ][128, 128].y > 50) Debug.LogError(velocity[READ][128, 128]);
         deltaTime = timeStep;
+        time += timeStep;
         float dx = 1.0f / size;
         float diffAlpha = (dx * dx) / (viscosity * deltaTime);
         float jacobiInverseBeta = 1 / (4 + diffAlpha);
@@ -106,7 +107,7 @@ public class NavierFluid
                 density[x, y] = AdvectF(pos, velocity[READ], density);
             }
         });
-        SwapReadWrite();
+        SwapReadWrite(velocity);
 
 
 
@@ -124,13 +125,13 @@ public class NavierFluid
                     velocity[WRITE][x, y] = Jacobi(new Vector2Int(x, y), diffAlpha, jacobiInverseBeta, velocity[READ], velocity[velocityW]);
                 }
             });
-            SwapReadWrite();
+            SwapReadWrite(velocity);
         }
 
-        ////////EXTERNAL FORCES
-        Vector2 forceDirection = new Vector2(Mathf.Sin(Time.time), Mathf.Cos(Time.time));
+        //////////EXTERNAL FORCES
+        Vector2 forceDirection = new Vector2(Mathf.Sin(time), Mathf.Cos(time));
         float mid = size / 2;
-        Vector2 midPoint = new Vector2(mid, 2);
+        Vector2 midPoint = new Vector2(mid, mid);
         //for (int x = 1; x < size - 1; x++)
         //{
         System.Threading.Tasks.Parallel.For(1, size - 1, (x) =>
@@ -138,10 +139,10 @@ public class NavierFluid
             for (int y = 1; y < size - 1; y++)
             {
                 float force = Mathf.Exp(-200 * Vector2.Distance(midPoint, new Vector2(x, y)));
-                velocity[WRITE][x, y] += Vector2.up * forceDirection*300;
+                velocity[WRITE][x, y] += forceDirection * deltaTime * force * 30000;
             }
         });
-        SwapReadWrite();
+        SwapReadWrite(velocity);
 
 
 
@@ -152,34 +153,36 @@ public class NavierFluid
         {
             for (int y = 1; y < size - 1; y++)
             {
-                divergence[x, y] = ComputeDivergence(new Vector2Int(x, y), velocity[READ]);
-                pressure[x, y] = 0;
+                divergence[x, y] = ComputeDivergence(new Vector2Int(x, y), velocity[READ], size * 0.5f);
+                pressure[WRITE][x, y] = 0;
             }
         }
-        SwapReadWrite();
+        SwapReadWrite(velocity);
+        SwapReadWrite(pressure);
         for (int i = 0; i < 50; i++)
         {
             for (int x = 1; x < size - 1; x++)
             {
                 for (int y = 1; y < size - 1; y++)
                 {
-                    pressure[x, y] = Jacobi(new Vector2Int(x, y), -diffAlpha, 0.25f, pressure, divergence);
+                    pressure[WRITE][x, y] = Jacobi(new Vector2Int(x, y), -(dx * dx), 0.25f, pressure[READ], divergence);
                 }
             }
+            SwapReadWrite(pressure);
         }
         for (int x = 1; x < size - 1; x++)
         {
             for (int y = 1; y < size - 1; y++)
             {
-                velocity[WRITE][x, y] -= ComputeGradient(new Vector2Int(x, y), pressure);
+                velocity[WRITE][x, y] -= ComputeGradient(new Vector2Int(x, y), pressure[READ]);
                 if (x == 1) velocity[WRITE][0, y] = -velocity[WRITE][x, y];
                 if (y == 1) velocity[WRITE][x, 0] = -velocity[WRITE][x, y];
                 if (x == size - 2) velocity[WRITE][size - 1, y] = -velocity[WRITE][x, y];
-                if (y == size - 2) velocity[WRITE][size - 1, 0] = -velocity[WRITE][x, y];
+                if (y == size - 2) velocity[WRITE][x, size - 1] = -velocity[WRITE][x, y];
             }
         }
 
-        SwapReadWrite();
+        SwapReadWrite(velocity);
     }
 
 
@@ -192,19 +195,19 @@ public class NavierFluid
     {
         // follow the velocity field "back in time"
         Vector2 pos = coords - deltaTime * velocity[coords.x, coords.y];
-        Vector2Int blCorner = Vector2Int.FloorToInt(pos);
-        blCorner.x = Mathf.Clamp(blCorner.x, 1, size - 1);
-        blCorner.y = Mathf.Clamp(blCorner.y, 1, size - 1);
+        Vector2Int swCorner = Vector2Int.FloorToInt(pos);
+        swCorner.x = Mathf.Clamp(swCorner.x, 1, size - 1);
+        swCorner.y = Mathf.Clamp(swCorner.y, 1, size - 1);
         //Get adjacent velocities
-        Vector2 ne = quantity[blCorner.x, blCorner.y];
-        Vector2 nw = quantity[blCorner.x - 1, blCorner.y];
-        Vector2 se = quantity[blCorner.x, blCorner.y - 1];
-        Vector2 sw = quantity[blCorner.x - 1, blCorner.y - 1];
+        Vector2 ne = quantity[swCorner.x + 1, swCorner.y + 1];
+        Vector2 nw = quantity[swCorner.x, swCorner.y + 1];
+        Vector2 se = quantity[swCorner.x + 1, swCorner.y];
+        Vector2 sw = quantity[swCorner.x, swCorner.y];
 
         // interpolate and write to the output fragment
-        Vector2 lerpA = Vector2.Lerp(ne, nw, pos.x - blCorner.x);
-        Vector2 lerpB = Vector2.Lerp(se, sw, pos.x - blCorner.x);
-        return Vector2.Lerp(lerpA, lerpB, pos.y - blCorner.y) * dissipation;
+        Vector2 northLerp = Vector2.Lerp(nw, ne, pos.x - swCorner.x);
+        Vector2 southLerp = Vector2.Lerp(sw, se, pos.x - swCorner.x);
+        return Vector2.Lerp(southLerp, northLerp, pos.y - swCorner.y) * dissipation;
     }
     float AdvectF(Vector2Int coords,
         Vector2[,] velocity,
@@ -213,19 +216,19 @@ public class NavierFluid
     {
         // follow the velocity field "back in time"
         Vector2 pos = coords - deltaTime * velocity[coords.x, coords.y];
-        Vector2Int blCorner = Vector2Int.FloorToInt(pos);
-        blCorner.x = Mathf.Clamp(blCorner.x, 1, size - 1);
-        blCorner.y = Mathf.Clamp(blCorner.y, 1, size - 1);
+        Vector2Int swCorner = Vector2Int.FloorToInt(pos);
+        swCorner.x = Mathf.Clamp(swCorner.x, 1, size - 1);
+        swCorner.y = Mathf.Clamp(swCorner.y, 1, size - 1);
         //Get adjacent velocities
-        float ne = quantity[blCorner.x, blCorner.y];
-        float nw = quantity[blCorner.x - 1, blCorner.y];
-        float se = quantity[blCorner.x, blCorner.y - 1];
-        float sw = quantity[blCorner.x - 1, blCorner.y - 1];
+        float ne = quantity[swCorner.x + 1, swCorner.y + 1];
+        float nw = quantity[swCorner.x, swCorner.y + 1];
+        float se = quantity[swCorner.x + 1, swCorner.y];
+        float sw = quantity[swCorner.x, swCorner.y];
 
         // interpolate and write to the output fragment
-        float lerpA = Mathf.Lerp(ne, nw, pos.x - blCorner.x);
-        float lerpB = Mathf.Lerp(se, sw, pos.x - blCorner.x);
-        float returnVal = Mathf.Lerp(lerpA, lerpB, pos.y - blCorner.y) * dissipation;
+        float northLerp = Mathf.Lerp(nw, ne, pos.x - swCorner.x);
+        float southLerp = Mathf.Lerp(sw, se, pos.x - swCorner.x);
+        float returnVal = Mathf.Lerp(southLerp, northLerp, pos.y - swCorner.y) * dissipation;
 
         return returnVal;
     }
@@ -282,7 +285,7 @@ public class NavierFluid
         float wB = w[coords.x, coords.y - 1].y;
         float wT = w[coords.x, coords.y + 1].y;
 
-        return halfInverseCellSize * (wR - wL + wT - wB) * 0.5f;
+        return halfInverseCellSize * (wR - wL + wT - wB);
     }
     Vector2 ComputeGradient(Vector2Int coords,   // grid coordinates
         float[,] p)
@@ -292,7 +295,7 @@ public class NavierFluid
         float pB = p[coords.x, coords.y - 1];
         float pT = p[coords.x, coords.y + 1];
 
-        return new Vector2(pR - pL, pT - pB) *1f;
+        return new Vector2(pR - pL, pT - pB) * size * 0.5f;
     }
     Vector2 Boundary(Vector2Int coords,    // grid coordinates
        int size)  // state field
