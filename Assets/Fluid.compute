@@ -1,22 +1,83 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel CSMain
+#pragma kernel Advect
+#pragma kernel JacobiDiffusion
+#pragma kernel Divergence
+#pragma kernel Gradient
 
+#include "UnityCG.cginc"
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
-RWTexture2D<float4> Result;
+RWStructuredBuffer<float2> Velocity;
+RWStructuredBuffer<float2> AdvectQuantityIn;
+RWStructuredBuffer<float2> AdvectQuantityOut;
 
+//Global variables
 int size;
+float deltaTime;
+
+//Diffusion variables
+float diffusionAlpha;
+float diffusionInverseBeta;
+StructuredBuffer<float2> Wvelocity;
+
+StructuredBuffer<float2> diffusionX;
+RWStructuredBuffer<float2> diffusionOut;
+
+
+//Projection variables
+float projectionAlpha;
+float halfInverseCellSize;
+float projectionBeta = 0.25f;
+RWStructuredBuffer<float2> divergence;
+
 
 int Index(int2 i) {
 	return clamp(i.x + i.y * size, 0, size * size - 1);
 }
-
+int Index(int x, int y) {
+	return clamp(x + y * size, 0, size * size - 1);
+}
 
 
 [numthreads(8, 8, 1)]
-void CSMain(uint3 id : SV_DispatchThreadID)
+void Advect(uint3 id : SV_DispatchThreadID)
 {
-	// TODO: insert actual code here!
+	float2 pos = id.xy - deltaTime * Velocity[Index(id.xy)];
+	int2 swCorner = floor(pos);
+	float2 sw = AdvectQuantityIn[Index(swCorner)];
+	float2 se = AdvectQuantityIn[Index(swCorner.x + 1, swCorner.y)];
+	float2 nw = AdvectQuantityIn[Index(swCorner.x, swCorner.y + 1)];
+	float2 ne = AdvectQuantityIn[Index(swCorner.x + 1, swCorner.y + 1)];
 
-	Result[id.xy] = float4(id.x & id.y, (id.x & 15) / 15.0, (id.y & 15) / 15.0, 0.0);
+	float northLerp = lerp(nw, ne, pos.x - swCorner.x);
+	float southLerp = lerp(sw, se, pos.x - swCorner.x);
+
+	AdvectQuantityOut[Index(id)] = lerp(northLerp, southLerp, pos.y - swCorner.y);
+}
+
+
+[numthreads(8, 8, 1)]
+void JacobiDiffusion(uint3 id : SV_DispatchThreadID)
+{
+	float2 L = diffusionX[Index(id.x - 1, id.y)];
+	float2 R = diffusionX[Index(id.x + 1, id.y)];
+	float2 B = diffusionX[Index(id.x, id.y - 1)];
+	float2 T = diffusionX[Index(id.x, id.y + 1)];
+
+	float2 C = Wvelocity[Index(id)];
+
+	diffusionOut[Index(id)] = (L + R + B + T + diffusionAlpha * C) * diffusionInverseBeta;
+}
+
+
+[numthreads(8, 8, 1)]
+void Divergence(uint3 id : SV_DispatchThreadID)
+{
+	divergence[Index(id)] = Wvelocity[Index(id.x, id.y)].x - Wvelocity[Index(id.x, id.y)].x + Wvelocity[Index(id.x, id.y)].y - Wvelocity[Index(id.x, id.y)].y;
+}
+
+[numthreads(8, 8, 1)]
+void Gradient(uint3 id : SV_DispatchThreadID)
+{
+	Velocity[Index(id)] -= float2(Wvelocity[Index(id.x, id.y)].x - Wvelocity[Index(id.x, id.y)].x, Wvelocity[Index(id.x, id.y)].y - Wvelocity[Index(id.x, id.y)].y) * halfInverseCellSize;
 }

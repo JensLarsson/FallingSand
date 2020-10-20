@@ -39,7 +39,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 	}
 	else {
 		int i = UVi.y + UVi.x * Width;
-		Result[id.xy] = float4(Velocity[i].x, Velocity[i].y, Density[i], 1);
+		Result[id.xy] = float4(Density[i], Density[i], Density[i], 1);
 		//Result[id.xy] = colourArray[Test[UVi.x + UVi.y * Width]];// == 1 ? float4(0, 0, 0, 0) : float4(1, 1, 1, 1);
 		//Result[id.xy] = float4(float2(UVi)/Width, 1, 1);
 	}

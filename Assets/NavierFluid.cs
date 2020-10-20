@@ -36,7 +36,7 @@ public class NavierFluid
 
     public float[,] Density => density;
     public Vector2[,] Velocities => velocity[READ];
-    public NavierFluid(int size,  float visc)
+    public NavierFluid(int size, float visc)
     {
         this.size = size;
         this.viscosity = visc;
@@ -50,14 +50,15 @@ public class NavierFluid
             new float[size, size],
             new float[size, size]
         };
-        density =
-            new float[size, size];
+        density = new float[size, size];
+
+
         divergence = new float[size, size];
         for (int x = 0; x < size; x++)
         {
             for (int y = 0; y < size; y++)
             {
-                density[x, y] = 0.0f;
+                density[x, y] = ((x + y) / 4) % 2;
             }
         }
     }
@@ -148,12 +149,12 @@ public class NavierFluid
 
         //////PROJECTION
 
-        float[,] divergence = new float[size, size];
+        divergence = new float[size, size];
         for (int x = 1; x < size - 1; x++)
         {
             for (int y = 1; y < size - 1; y++)
             {
-                divergence[x, y] = ComputeDivergence(new Vector2Int(x, y), velocity[READ], size * 0.5f);
+                divergence[x, y] = ComputeDivergence(new Vector2Int(x, y), velocity[velocityW], size * 0.5f);
                 pressure[WRITE][x, y] = 0;
             }
         }
