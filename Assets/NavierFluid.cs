@@ -28,7 +28,7 @@ public class NavierFluid : MonoBehaviour
 
     Vector2[][,] velocity;
     float[][,] pressure;
-    float[,] quantity;
+    Vector3[,] quantity;
     float[,] divergence;
     int READ = 0;
     int WRITE = 1;
@@ -37,7 +37,7 @@ public class NavierFluid : MonoBehaviour
     float time;
 
     public int Size => size;
-    public float[,] Quantity => quantity;
+    public Vector3[,] Quantity => quantity;
     public Vector2[,] VelocityField => velocity[READ];
 
 
@@ -56,7 +56,7 @@ public class NavierFluid : MonoBehaviour
             new float[size, size],
             new float[size, size]
         };
-        quantity = new float[size, size];
+        quantity = new Vector3[size, size];
 
 
         divergence = new float[size, size];
@@ -64,9 +64,11 @@ public class NavierFluid : MonoBehaviour
         {
             for (int y = 0; y < size; y++)
             {
-                quantity[x, y] = ((x + y) / 4) % 2;
+                quantity[x, y] = new Vector3(((x + y) / 4) % 2, 0, 0);
             }
         }
+
+        Blipper.Instance.SettupShader(size);
     }
     void SwapReadWrite(object[] array)
     {
@@ -78,7 +80,7 @@ public class NavierFluid : MonoBehaviour
     {
         if (x > 0 && x < size - 1 && y > 0 && y < size - 1)
         {
-            quantity[x, y] += amount;
+            quantity[x, y].x += amount;
         }
     }
     public void AddVelocity(int x, int y, Vector2 amount)
@@ -103,14 +105,12 @@ public class NavierFluid : MonoBehaviour
         //////ADVECT
         System.Threading.Tasks.Parallel.For(1, size - 1, (x) =>
         {
-            //for (int x = 1; x < size - 1; x++)
-            //{
             for (int y = 1; y < size - 1; y++)
             {
                 Vector2Int pos = new Vector2Int(x, y);
                 velocity[velocityW][x, y] = AdvectVec(pos, velocity[READ], velocity[READ]);
                 velocity[WRITE][x, y] = velocity[velocityW][x, y];
-                quantity[x, y] = AdvectF(pos, velocity[READ], quantity);
+                quantity[x, y] = AdvectVec(pos, velocity[READ], quantity);
             }
         });
         SwapReadWrite(velocity);
@@ -124,8 +124,6 @@ public class NavierFluid : MonoBehaviour
         {
             System.Threading.Tasks.Parallel.For(1, size - 1, (x) =>
             {
-                //for (int x = 1; x < size - 1; x++)
-                //{
                 for (int y = 1; y < size - 1; y++)
                 {
                     velocity[WRITE][x, y] = Jacobi(x, y, diffAlpha, jacobiInverseBeta, velocity[READ], velocity[velocityW]);
@@ -138,8 +136,6 @@ public class NavierFluid : MonoBehaviour
         Vector2 forceDirection = new Vector2(Mathf.Sin(time), Mathf.Cos(time));
         float mid = size / 2;
         Vector2 midPoint = new Vector2(mid, mid);
-        //for (int x = 1; x < size - 1; x++)
-        //{
         System.Threading.Tasks.Parallel.For(1, size - 1, (x) =>
         {
             for (int y = 1; y < size - 1; y++)
@@ -187,6 +183,8 @@ public class NavierFluid : MonoBehaviour
         }
 
         SwapReadWrite(velocity);
+
+        Blipper.Instance.UpdateValues(VelocityField, Quantity);
     }
 
 
@@ -212,6 +210,29 @@ public class NavierFluid : MonoBehaviour
         Vector2 northLerp = Vector2.Lerp(nw, ne, pos.x - swCorner.x);
         Vector2 southLerp = Vector2.Lerp(sw, se, pos.x - swCorner.x);
         return Vector2.Lerp(southLerp, northLerp, pos.y - swCorner.y) * dissipation;
+    }
+
+
+    Vector3 AdvectVec(Vector2Int coords,
+        Vector2[,] velocity,
+        Vector3[,] quantity,   // quantity to advect from
+        float dissipation = 1)
+    {
+        // follow the velocity field "back in time"
+        Vector2 pos = coords - deltaTime * velocity[coords.x, coords.y];
+        Vector2Int swCorner = Vector2Int.FloorToInt(pos);
+        swCorner.x = Mathf.Clamp(swCorner.x, 1, size - 1);
+        swCorner.y = Mathf.Clamp(swCorner.y, 1, size - 1);
+        //Get adjacent velocities
+        Vector3 ne = quantity[swCorner.x + 1, swCorner.y + 1];
+        Vector3 nw = quantity[swCorner.x, swCorner.y + 1];
+        Vector3 se = quantity[swCorner.x + 1, swCorner.y];
+        Vector3 sw = quantity[swCorner.x, swCorner.y];
+
+        // interpolate and write to the output fragment
+        Vector3 northLerp = Vector2.Lerp(nw, ne, pos.x - swCorner.x);
+        Vector3 southLerp = Vector2.Lerp(sw, se, pos.x - swCorner.x);
+        return Vector3.Lerp(southLerp, northLerp, pos.y - swCorner.y) * dissipation;
     }
     float AdvectF(Vector2Int coords,
         Vector2[,] velocity,

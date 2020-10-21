@@ -4,7 +4,7 @@
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
 RWTexture2D<float4> Result;
-RWStructuredBuffer<float> Quantity;
+RWStructuredBuffer<float3> Quantity;
 RWStructuredBuffer<float2> Velocity;
 
 int Width;
@@ -38,7 +38,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 	}
 	else {
 		int i = UVi.y + UVi.x * Width;
-		Result[id.xy] = float4(Quantity[i].x, Quantity[i].x, Quantity[i], 1);
+		Result[id.xy] = float4(Quantity[i].x, Quantity[i].x, Quantity[i].x, 1);
 		//Result[id.xy] = float4(float2(UVi)/Width, 1, 1);
 	}
 }

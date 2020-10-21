@@ -113,8 +113,8 @@ void ProjectionJacobi(uint3 id : SV_DispatchThreadID)
 [numthreads(1, 1, 1)]
 void AddForce(uint3 id : SV_DispatchThreadID)
 {
-	float force = exp(-distance(position, id));
-	Velocity[Index(id)] += direction * force * 300;
+	float force = exp(-200*distance(position, id));
+	Velocity[Index(id)] += direction * force * 30000;
 }
 
 

@@ -30,6 +30,7 @@ public class NavierFluidCompute : MonoBehaviour
     [SerializeField] float viscosity;
     [SerializeField] float diffusionJacobiItterations = 40;
     [SerializeField] float projectionJacobiItterations = 50;
+    [SerializeField] float deltaTime;
 
     ComputeBuffer VelocityFieldBuffer;
     ComputeBuffer WvelocityBuffer;
@@ -42,7 +43,7 @@ public class NavierFluidCompute : MonoBehaviour
     ComputeBuffer PressureBuffer_OUT;
 
     public Vector2[,] VelocityField => velocityField[RWvel.READ];
-    public Vector2[,] Quantity => quantity;
+    public Vector3[,] Quantity => quantity;
 
 
     Vector2[][,] velocityField;
@@ -52,12 +53,11 @@ public class NavierFluidCompute : MonoBehaviour
     float[][,] pressure;
     ReadWriteIndexes RWpressure = new ReadWriteIndexes();
 
-    Vector2[,] quantity;
+    Vector3[,] quantity;
     float[,] divergence;
 
 
 
-    float deltaTime;
     float dx;
     float dxNegativeSquare;
     Vector2 previousMousePosition = new Vector2();
@@ -67,7 +67,7 @@ public class NavierFluidCompute : MonoBehaviour
     {
         Instance = this;
 
-        
+
         velocityField = new Vector2[3][,]
        {
             new Vector2[size,size],
@@ -79,7 +79,7 @@ public class NavierFluidCompute : MonoBehaviour
             new float[size,size],
             new float[size,size]
        };
-        quantity = new Vector2[size, size];
+        quantity = new Vector3  [size, size];
 
         for (int x = 0; x < size; x++)
         {
@@ -90,7 +90,6 @@ public class NavierFluidCompute : MonoBehaviour
         }
 
         divergence = new float[size, size];
-        deltaTime = 0.0033f;
         dx = 1.0f / size;
         dxNegativeSquare = -dx * dx;
         computeShader.SetInt("size", size);
@@ -99,6 +98,10 @@ public class NavierFluidCompute : MonoBehaviour
         computeShader.SetVector("position", new Vector2((float)size * 0.5f, (float)size * 0.5f));
 
         SettupBuffers();
+    }
+    private void Start()
+    {
+        Blipper.Instance.SettupShader(size);
     }
 
     void FlipReadWrite(ReadWriteIndexes rwIndex)
@@ -123,11 +126,11 @@ public class NavierFluidCompute : MonoBehaviour
         computeShader.SetBuffer(Kernels.Divergence, "Wvelocity", WvelocityBuffer);
         computeShader.SetBuffer(Kernels.Gradient, "Wvelocity", WvelocityBuffer);
 
-        QuantityBuffer_IN = new ComputeBuffer(size * size, sizeof(float) * 2);
+        QuantityBuffer_IN = new ComputeBuffer(size * size, sizeof(float) * 3);
         computeShader.SetBuffer(Kernels.Advect, "AdvectQuantityIn", QuantityBuffer_IN);
         computeShader.SetBuffer(Kernels.AdvectV, "AdvectQuantityIn", QuantityBuffer_IN);
 
-        QuantityBuffer_OUT = new ComputeBuffer(size * size, sizeof(float) * 2);
+        QuantityBuffer_OUT = new ComputeBuffer(size * size, sizeof(float) * 3);
         computeShader.SetBuffer(Kernels.Advect, "AdvectQuantityOut", QuantityBuffer_OUT);
         computeShader.SetBuffer(Kernels.AdvectV, "AdvectQuantityOut", QuantityBuffer_OUT);
 
@@ -192,7 +195,7 @@ public class NavierFluidCompute : MonoBehaviour
         //Force Addition
         //float scale = (float)Screen.width / (float)size;
         //Vector2 mousePos = new Vector2((Input.mousePosition.x / scale), (Input.mousePosition.y / scale)); ;
-        time += deltaTime*10;
+        time += deltaTime * 10;
         forceDirection.x = Mathf.Sin(time);
         forceDirection.y = Mathf.Cos(time);
         computeShader.SetVector("direction", forceDirection);
@@ -221,5 +224,7 @@ public class NavierFluidCompute : MonoBehaviour
         VelocityFieldBuffer.GetData(velocityField[RWvel.WRITE]);
         FlipReadWrite(RWvel);
 
+
+        Blipper.Instance.UpdateValues(VelocityField, quantity);
     }
 }

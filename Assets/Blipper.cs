@@ -17,15 +17,25 @@ public class Blipper : MonoBehaviour
 
     NavierFluid fluid;
     int size;
-    private void Start()
+
+    public static Blipper Instance;
+    private void Awake()
     {
-        size = NavierFluid.Instance.Size;
+        Instance = this;
+    }
+    public void SettupShader(int width)
+    {
+        size = width;
         velocityBuffer = new ComputeBuffer(size * size, sizeof(float) * 2);
-        quantityBuffer = new ComputeBuffer(size * size, sizeof(float));
-        quantityBuffer.SetData(NavierFluid.Instance.Quantity);
-        velocityBuffer.SetData(NavierFluid.Instance.VelocityField);
+        quantityBuffer = new ComputeBuffer(size * size, sizeof(float) * 3);
         renderShader.SetBuffer(0, "Quantity", quantityBuffer);
         renderShader.SetBuffer(0, "Velocity", velocityBuffer);
+    }
+
+    public void UpdateValues(Vector2[,] velocitField, Vector3[,] quantity)
+    {
+        quantityBuffer.SetData(quantity);
+        velocityBuffer.SetData(velocitField);
     }
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
@@ -35,9 +45,6 @@ public class Blipper : MonoBehaviour
 
     private void Render(RenderTexture destination)
     {
-        velocityBuffer.SetData(NavierFluid.Instance.VelocityField);
-        quantityBuffer.SetData(NavierFluid.Instance.Quantity);
-
 
         // Make sure we have a current render target
         InitRenderTexture();
@@ -46,7 +53,7 @@ public class Blipper : MonoBehaviour
         renderShader.SetInt("Width", size);
         renderShader.SetInt("Height", size);
 
-        renderShader.Dispatch(0, size-1, size-1, 1);
+        renderShader.Dispatch(0, size - 1, size - 1, 1);
         // Blit the result texture to the screen
         Graphics.Blit(_target, destination);
     }
