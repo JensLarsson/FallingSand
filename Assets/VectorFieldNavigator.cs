@@ -21,10 +21,15 @@ public class VectorFieldNavigator : MonoBehaviour
     }
     void Update()
     {
-        int x = Mathf.FloorToInt((position.x + width * 0.5f) * arrayScale);
-        int y = Mathf.FloorToInt((position.y + width * 0.5f) * arrayScale);
-        //Debug.Log($"{x}:{y}");
-        position += NavierFluid.Instance.VelocityField[x, y] * Time.deltaTime * velocityResistance;
-        transform.position = position;
+        if (NavierFluid.Instance != null)
+        {
+
+            int x = Mathf.FloorToInt((position.x + width * 0.5f) * arrayScale);
+            int y = Mathf.FloorToInt((position.y + width * 0.5f) * arrayScale);
+            //Debug.Log($"{x}:{y}");
+
+            position += NavierFluid.Instance.VelocityField[x, y] * Time.deltaTime * velocityResistance;
+            transform.position = position;
+        }
     }
 }

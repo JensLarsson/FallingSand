@@ -13,6 +13,8 @@
 RWStructuredBuffer<float2> Velocity;
 RWStructuredBuffer<float2> AdvectQuantityIn;
 RWStructuredBuffer<float2> AdvectQuantityOut;
+RWStructuredBuffer<float3> AdvectQuantity3In;
+RWStructuredBuffer<float3> AdvectQuantity3Out;
 
 //Global variables
 int size;
@@ -52,23 +54,23 @@ int Index(int x, int y) {
 void Advect(uint3 id : SV_DispatchThreadID)
 {
 	float2 pos = id.xy - deltaTime * Velocity[Index(id.xy)];
-	int2 swCorner = floor(pos);
-	float2 sw = AdvectQuantityIn[Index(swCorner)];
-	float2 se = AdvectQuantityIn[Index(swCorner.x + 1, swCorner.y)];
-	float2 nw = AdvectQuantityIn[Index(swCorner.x, swCorner.y + 1)];
-	float2 ne = AdvectQuantityIn[Index(swCorner.x + 1, swCorner.y + 1)];
+	int2 swCorner = (pos);
+	float3 sw = AdvectQuantity3In[Index(swCorner)];
+	float3 se = AdvectQuantity3In[Index(swCorner.x + 1, swCorner.y)];
+	float3 nw = AdvectQuantity3In[Index(swCorner.x, swCorner.y + 1)];
+	float3 ne = AdvectQuantity3In[Index(swCorner.x + 1, swCorner.y + 1)];
 
 	float northLerp = lerp(nw, ne, pos.x - swCorner.x);
 	float southLerp = lerp(sw, se, pos.x - swCorner.x);
 
-	AdvectQuantityOut[Index(id)] = lerp(southLerp, northLerp, pos.y - swCorner.y);
+	AdvectQuantity3Out[Index(id)] = lerp(southLerp, northLerp, pos.y - swCorner.y);
 }
 
 [numthreads(1, 1, 1)]
 void AdvectV(uint3 id : SV_DispatchThreadID)
 {
 	float2 pos = id.xy - deltaTime * Velocity[Index(id.xy)];
-	int2 swCorner = floor(pos);
+	int2 swCorner = pos;
 	float2 sw = AdvectQuantityIn[Index(swCorner)];
 	float2 se = AdvectQuantityIn[Index(swCorner.x + 1, swCorner.y)];
 	float2 nw = AdvectQuantityIn[Index(swCorner.x, swCorner.y + 1)];
@@ -104,7 +106,7 @@ void ProjectionJacobi(uint3 id : SV_DispatchThreadID)
 	float2 B = PressureIN[Index(id.x, id.y - 1)];
 	float2 T = PressureIN[Index(id.x, id.y + 1)];
 
-	float2 C = Wvelocity[Index(id)];
+	float2 C = divergence[Index(id)];
 
 	PressureOUT[Index(id)] = (L + R + B + T + projectionAlpha * C) * projectionInverseBeta;
 }

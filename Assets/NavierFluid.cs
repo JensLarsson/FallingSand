@@ -24,6 +24,7 @@ public class NavierFluid : MonoBehaviour
     [SerializeField] int size;
     [SerializeField] float viscosity;
     [SerializeField] float deltaTime;
+    [SerializeField] Texture2D image;
 
 
     Vector2[][,] velocity;
@@ -58,16 +59,31 @@ public class NavierFluid : MonoBehaviour
         };
         quantity = new Vector3[size, size];
 
-
         divergence = new float[size, size];
-        for (int x = 0; x < size; x++)
+
+        if (image != null)
         {
-            for (int y = 0; y < size; y++)
+            float imageScale = (image.width > image.height ? image.width : image.height) / size;
+            for (int x = 0; x < size; x++)
             {
-                quantity[x, y] = new Vector3(((x + y) / 4) % 2, 0, 0);
+                for (int y = 0; y < size; y++)
+                {
+                    var colour = image.GetPixel(Mathf.FloorToInt((float)x * imageScale), Mathf.FloorToInt((float)y * imageScale));
+                    quantity[x, y] = new Vector3(colour.r, colour.g, colour.b);
+                }
             }
         }
-
+        else
+        {
+            for (int x = 0; x < size; x++)
+            {
+                for (int y = 0; y < size; y++)
+                {
+                    quantity[x, y].x = ((x + y) / 4) % 2;
+                    quantity[x, y].y = ((x + y)) % 2;
+                }
+            }
+        }
         Blipper.Instance.SettupShader(size);
     }
     void SwapReadWrite(object[] array)
@@ -76,20 +92,6 @@ public class NavierFluid : MonoBehaviour
         array[0] = array[1];
         array[1] = temp;
     }
-    public void AddDencity(int x, int y, float amount)
-    {
-        if (x > 0 && x < size - 1 && y > 0 && y < size - 1)
-        {
-            quantity[x, y].x += amount;
-        }
-    }
-    public void AddVelocity(int x, int y, Vector2 amount)
-    {
-        if (x > 0 && x < size - 1 && y > 0 && y < size - 1)
-            velocity[READ][x, y] += amount;
-    }
-
-
 
 
     public void Update()
