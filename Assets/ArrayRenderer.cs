@@ -1,33 +1,35 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Threading.Tasks;
 
-
-public class Blipper : MonoBehaviour
+public class ArrayRenderer : MonoBehaviour
 {
     public ComputeShader renderShader;
     private RenderTexture _target;
+    int height, width;
 
-    ComputeBuffer intBuffer;
-    ComputeBuffer quantityBuffer;
-    ComputeBuffer velocityBuffer;
+    ComputeBuffer arrayBuffer;
 
-    SandSimulation simulation;
-
-    NavierFluid fluid;
-    int size;
-    private void Start()
+    public void SetRenderableArray(Vector2[,] vectorArray/*, float[,] floatArray*/)
     {
-        size = NavierFluid.Instance.Size;
-        velocityBuffer = new ComputeBuffer(size * size, sizeof(float) * 2);
-        quantityBuffer = new ComputeBuffer(size * size, sizeof(float));
-        quantityBuffer.SetData(NavierFluid.Instance.Quantity);
-        velocityBuffer.SetData(NavierFluid.Instance.VelocityField);
-        renderShader.SetBuffer(0, "Quantity", quantityBuffer);
-        renderShader.SetBuffer(0, "Velocity", velocityBuffer);
+        width = vectorArray.GetLength(0);
+        height = vectorArray.GetLength(1);
+        renderShader.SetInt("Width", width);
+        renderShader.SetInt("Height", height);
+        arrayBuffer = new ComputeBuffer(width * height, sizeof(float) * 2);
     }
 
+    // Start is called before the first frame update
+    void Awake()
+    {
+
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+
+    }
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
         Render(destination);
@@ -35,18 +37,15 @@ public class Blipper : MonoBehaviour
 
     private void Render(RenderTexture destination)
     {
-        velocityBuffer.SetData(NavierFluid.Instance.VelocityField);
-        quantityBuffer.SetData(NavierFluid.Instance.Quantity);
-
-
         // Make sure we have a current render target
         InitRenderTexture();
         // Set the target and dispatch the compute shader
         renderShader.SetTexture(0, "Result", _target);
-        renderShader.SetInt("Width", size);
-        renderShader.SetInt("Height", size);
 
-        renderShader.Dispatch(0, size-1, size-1, 1);
+
+        int threadGroupsX = Mathf.CeilToInt(width);
+        int threadGroupsY = Mathf.CeilToInt(height);
+        renderShader.Dispatch(0, threadGroupsX, threadGroupsY, 1);
         // Blit the result texture to the screen
         Graphics.Blit(_target, destination);
     }
@@ -65,4 +64,5 @@ public class Blipper : MonoBehaviour
             _target.Create();
         }
     }
+
 }

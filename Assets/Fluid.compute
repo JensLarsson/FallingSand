@@ -1,7 +1,8 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel Advect
 #pragma kernel AdvectV
-#pragma kernel JacobiDiffusion
+#pragma kernel DiffusionJacobi
+#pragma kernel ProjectionJacobi
 #pragma kernel AddForce
 #pragma kernel Divergence
 #pragma kernel Gradient
@@ -32,8 +33,12 @@ float2 direction;
 //Projection variables
 float projectionAlpha;
 float halfInverseCellSize;
-float projectionBeta = 0.25f;
-RWStructuredBuffer<float2> divergence;
+
+RWStructuredBuffer<float> divergence;
+RWStructuredBuffer<float> PressureOUT;
+RWStructuredBuffer<float> PressureIN;
+
+float projectionInverseBeta = 0.25f;
 
 
 int Index(int2 i) {
@@ -43,7 +48,7 @@ int Index(int x, int y) {
 	return clamp(x + y * size, 0, size * size - 1);
 }
 
-[numthreads(8, 8, 1)]
+[numthreads(1, 1, 1)]
 void Advect(uint3 id : SV_DispatchThreadID)
 {
 	float2 pos = id.xy - deltaTime * Velocity[Index(id.xy)];
@@ -56,10 +61,10 @@ void Advect(uint3 id : SV_DispatchThreadID)
 	float northLerp = lerp(nw, ne, pos.x - swCorner.x);
 	float southLerp = lerp(sw, se, pos.x - swCorner.x);
 
-	AdvectQuantityOut[Index(id)] = lerp(northLerp, southLerp, pos.y - swCorner.y);
+	AdvectQuantityOut[Index(id)] = lerp(southLerp, northLerp, pos.y - swCorner.y);
 }
 
-[numthreads(8, 8, 1)]
+[numthreads(1, 1, 1)]
 void AdvectV(uint3 id : SV_DispatchThreadID)
 {
 	float2 pos = id.xy - deltaTime * Velocity[Index(id.xy)];
@@ -72,13 +77,13 @@ void AdvectV(uint3 id : SV_DispatchThreadID)
 	float northLerp = lerp(nw, ne, pos.x - swCorner.x);
 	float southLerp = lerp(sw, se, pos.x - swCorner.x);
 
-	AdvectQuantityOut[Index(id)] = lerp(northLerp, southLerp, pos.y - swCorner.y);
+	AdvectQuantityOut[Index(id)] = lerp(southLerp, northLerp, pos.y - swCorner.y);
 	Wvelocity[Index(id)] = AdvectQuantityOut[Index(id)];
 }
 
 
-[numthreads(8, 8, 1)]
-void JacobiDiffusion(uint3 id : SV_DispatchThreadID)
+[numthreads(1, 1, 1)]
+void DiffusionJacobi(uint3 id : SV_DispatchThreadID)
 {
 	float2 L = diffusionX[Index(id.x - 1, id.y)];
 	float2 R = diffusionX[Index(id.x + 1, id.y)];
@@ -91,22 +96,38 @@ void JacobiDiffusion(uint3 id : SV_DispatchThreadID)
 }
 
 
-[numthreads(8, 8, 1)]
+[numthreads(1, 1, 1)]
+void ProjectionJacobi(uint3 id : SV_DispatchThreadID)
+{
+	float2 L = PressureIN[Index(id.x - 1, id.y)];
+	float2 R = PressureIN[Index(id.x + 1, id.y)];
+	float2 B = PressureIN[Index(id.x, id.y - 1)];
+	float2 T = PressureIN[Index(id.x, id.y + 1)];
+
+	float2 C = Wvelocity[Index(id)];
+
+	PressureOUT[Index(id)] = (L + R + B + T + projectionAlpha * C) * projectionInverseBeta;
+}
+
+
+[numthreads(1, 1, 1)]
 void AddForce(uint3 id : SV_DispatchThreadID)
 {
 	float force = exp(-distance(position, id));
-	Velocity[Index(id)] += direction * force;
+	Velocity[Index(id)] += direction * force * 300;
 }
 
 
-[numthreads(8, 8, 1)]
+[numthreads(1, 1, 1)]
 void Divergence(uint3 id : SV_DispatchThreadID)
 {
-	divergence[Index(id)] = Wvelocity[Index(id.x, id.y)].x - Wvelocity[Index(id.x, id.y)].x + Wvelocity[Index(id.x, id.y)].y - Wvelocity[Index(id.x, id.y)].y;
+	divergence[Index(id)] = Wvelocity[Index(id.x, id.y)].x - Wvelocity[Index(id.x, id.y)].x + Wvelocity[Index(id.x, id.y)].y - Wvelocity[Index(id.x, id.y)].y * halfInverseCellSize;
+	PressureOUT[Index(id)] = 0;
 }
 
-[numthreads(8, 8, 1)]
+
+[numthreads(1, 1, 1)]
 void Gradient(uint3 id : SV_DispatchThreadID)
 {
-	Velocity[Index(id)] -= float2(Wvelocity[Index(id.x, id.y)].x - Wvelocity[Index(id.x, id.y)].x, Wvelocity[Index(id.x, id.y)].y - Wvelocity[Index(id.x, id.y)].y) * halfInverseCellSize;
+	Velocity[Index(id)] -= float2(PressureOUT[Index(id.x, id.y)] - PressureOUT[Index(id.x, id.y)], PressureOUT[Index(id.x, id.y)] - PressureOUT[Index(id.x, id.y)]) * halfInverseCellSize;
 }

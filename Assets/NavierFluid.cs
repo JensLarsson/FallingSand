@@ -19,27 +19,33 @@ using UnityEngine;
 
 
 // u + ∇p = w
-public class NavierFluid
+public class NavierFluid : MonoBehaviour
 {
-    int size;
+    [SerializeField] int size;
+    [SerializeField] float viscosity;
+    [SerializeField] float deltaTime;
+
+
     Vector2[][,] velocity;
     float[][,] pressure;
-    float[,] density;
+    float[,] quantity;
     float[,] divergence;
-    float viscosity;
-    float deltaTime;
     int READ = 0;
     int WRITE = 1;
     const int velocityW = 2;
 
     float time;
 
-    public float[,] Density => density;
-    public Vector2[,] Velocities => velocity[READ];
-    public NavierFluid(int size, float visc)
+    public int Size => size;
+    public float[,] Quantity => quantity;
+    public Vector2[,] VelocityField => velocity[READ];
+
+
+    public static NavierFluid Instance;
+    void Awake()
     {
-        this.size = size;
-        this.viscosity = visc;
+        Instance = this;
+
         velocity = new Vector2[3][,]
         {
             new Vector2[size,size],
@@ -50,7 +56,7 @@ public class NavierFluid
             new float[size, size],
             new float[size, size]
         };
-        density = new float[size, size];
+        quantity = new float[size, size];
 
 
         divergence = new float[size, size];
@@ -58,7 +64,7 @@ public class NavierFluid
         {
             for (int y = 0; y < size; y++)
             {
-                density[x, y] = ((x + y) / 4) % 2;
+                quantity[x, y] = ((x + y) / 4) % 2;
             }
         }
     }
@@ -72,7 +78,7 @@ public class NavierFluid
     {
         if (x > 0 && x < size - 1 && y > 0 && y < size - 1)
         {
-            density[x, y] += amount;
+            quantity[x, y] += amount;
         }
     }
     public void AddVelocity(int x, int y, Vector2 amount)
@@ -84,10 +90,9 @@ public class NavierFluid
 
 
 
-    public void StepSimulation(float timeStep)
+    public void Update()
     {
-        deltaTime = timeStep;
-        time += timeStep;
+        time += deltaTime;
         float dx = 1.0f / size;
         float diffAlpha = (dx * dx) / (viscosity * deltaTime);
         float jacobiInverseBeta = 1 / (4 + diffAlpha);
@@ -105,7 +110,7 @@ public class NavierFluid
                 Vector2Int pos = new Vector2Int(x, y);
                 velocity[velocityW][x, y] = AdvectVec(pos, velocity[READ], velocity[READ]);
                 velocity[WRITE][x, y] = velocity[velocityW][x, y];
-                density[x, y] = AdvectF(pos, velocity[READ], density);
+                quantity[x, y] = AdvectF(pos, velocity[READ], quantity);
             }
         });
         SwapReadWrite(velocity);
@@ -115,7 +120,7 @@ public class NavierFluid
 
         //////DIFFUSION
 
-        for (int i = 0; i < 40; i++)
+        for (int i = 0; i < 20; i++)
         {
             System.Threading.Tasks.Parallel.For(1, size - 1, (x) =>
             {
@@ -123,7 +128,7 @@ public class NavierFluid
                 //{
                 for (int y = 1; y < size - 1; y++)
                 {
-                    velocity[WRITE][x, y] = Jacobi(new Vector2Int(x, y), diffAlpha, jacobiInverseBeta, velocity[READ], velocity[velocityW]);
+                    velocity[WRITE][x, y] = Jacobi(x, y, diffAlpha, jacobiInverseBeta, velocity[READ], velocity[velocityW]);
                 }
             });
             SwapReadWrite(velocity);
@@ -143,7 +148,6 @@ public class NavierFluid
                 velocity[WRITE][x, y] += forceDirection * deltaTime * force * 30000;
             }
         });
-        SwapReadWrite(velocity);
 
 
 
@@ -158,15 +162,14 @@ public class NavierFluid
                 pressure[WRITE][x, y] = 0;
             }
         }
-        SwapReadWrite(velocity);
         SwapReadWrite(pressure);
-        for (int i = 0; i < 50; i++)
+        for (int i = 0; i < 30; i++)
         {
             for (int x = 1; x < size - 1; x++)
             {
                 for (int y = 1; y < size - 1; y++)
                 {
-                    pressure[WRITE][x, y] = Jacobi(new Vector2Int(x, y), -(dx * dx), 0.25f, pressure[READ], divergence);
+                    pressure[WRITE][x, y] = Jacobi(x, y, -(dx * dx), 0.25f, pressure[READ], divergence);
                 }
             }
             SwapReadWrite(pressure);
@@ -239,41 +242,41 @@ public class NavierFluid
     ///-(1/dencityConstant)∇Preasure
     //v = p
     //specialP = D
-    float Jacobi(Vector2Int coords,
+    float Jacobi(int xPos, int yPos,
         float alpha,
         float inverseBeta,
         float[,] x,   // x vector (Ax = b)
         float[,] b)   // b vector (Ax = b)
     {
-        // left, right, bottom, and top x samples
-        float xL = x[coords.x - 1, coords.y];
-        float xR = x[coords.x + 1, coords.y];
-        float xB = x[coords.x, coords.y - 1];
-        float xT = x[coords.x, coords.y + 1];
+        //// left, right, bottom, and top x samples
+        //float xL = x[coords.x - 1, coords.y];
+        //float xR = x[coords.x + 1, coords.y];
+        //float xB = x[coords.x, coords.y - 1];
+        //float xT = x[coords.x, coords.y + 1];
 
-        // b sample, from center
-        float bC = b[coords.x, coords.y];
+        //// b sample, from center
+        //float bC = b[coords.x, coords.y];
 
         // evaluate Jacobi iteration
-        return (xL + xR + xB + xT + alpha * bC) * inverseBeta;
+        return (x[xPos - 1, yPos] + x[xPos + 1, yPos] + x[xPos, yPos - 1] + x[xPos, yPos + 1] + alpha * b[xPos, yPos]) * inverseBeta;
     }
-    Vector2 Jacobi(Vector2Int coords,
+    Vector2 Jacobi(int xPos, int yPos,
     float alpha,
     float inverseBeta,
     Vector2[,] x,   // x vector (Ax = b)
     Vector2[,] b)   // b vector (Ax = b)
     {
-        // left, right, bottom, and top x samples
-        Vector2 xL = x[coords.x - 1, coords.y];
-        Vector2 xR = x[coords.x + 1, coords.y];
-        Vector2 xB = x[coords.x, coords.y - 1];
-        Vector2 xT = x[coords.x, coords.y + 1];
+        //// left, right, bottom, and top x samples
+        //Vector2 xL = x[coords.x - 1, coords.y];
+        //Vector2 xR = x[coords.x + 1, coords.y];
+        //Vector2 xB = x[coords.x, coords.y - 1];
+        //Vector2 xT = x[coords.x, coords.y + 1];
 
-        // b sample, from center
-        Vector2 bC = b[coords.x, coords.y];
+        //// b sample, from center
+        //Vector2 bC = b[coords.x, coords.y];
 
         // evaluate Jacobi iteration
-        return (xL + xR + xB + xT + alpha * bC) * inverseBeta;
+        return (x[xPos - 1, yPos] + x[xPos + 1, yPos] + x[xPos, yPos - 1] + x[xPos, yPos + 1] + alpha * b[xPos, yPos]) * inverseBeta;
     }
 
 
