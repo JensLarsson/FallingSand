@@ -1,6 +1,8 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel Advect
+#pragma kernel AdvectV
 #pragma kernel JacobiDiffusion
+#pragma kernel AddForce
 #pragma kernel Divergence
 #pragma kernel Gradient
 
@@ -18,11 +20,14 @@ float deltaTime;
 //Diffusion variables
 float diffusionAlpha;
 float diffusionInverseBeta;
-StructuredBuffer<float2> Wvelocity;
+RWStructuredBuffer<float2> Wvelocity;
 
-StructuredBuffer<float2> diffusionX;
+RWStructuredBuffer<float2> diffusionX;
 RWStructuredBuffer<float2> diffusionOut;
 
+//Force Addition variables
+float2 position;
+float2 direction;
 
 //Projection variables
 float projectionAlpha;
@@ -37,7 +42,6 @@ int Index(int2 i) {
 int Index(int x, int y) {
 	return clamp(x + y * size, 0, size * size - 1);
 }
-
 
 [numthreads(8, 8, 1)]
 void Advect(uint3 id : SV_DispatchThreadID)
@@ -55,6 +59,23 @@ void Advect(uint3 id : SV_DispatchThreadID)
 	AdvectQuantityOut[Index(id)] = lerp(northLerp, southLerp, pos.y - swCorner.y);
 }
 
+[numthreads(8, 8, 1)]
+void AdvectV(uint3 id : SV_DispatchThreadID)
+{
+	float2 pos = id.xy - deltaTime * Velocity[Index(id.xy)];
+	int2 swCorner = floor(pos);
+	float2 sw = AdvectQuantityIn[Index(swCorner)];
+	float2 se = AdvectQuantityIn[Index(swCorner.x + 1, swCorner.y)];
+	float2 nw = AdvectQuantityIn[Index(swCorner.x, swCorner.y + 1)];
+	float2 ne = AdvectQuantityIn[Index(swCorner.x + 1, swCorner.y + 1)];
+
+	float northLerp = lerp(nw, ne, pos.x - swCorner.x);
+	float southLerp = lerp(sw, se, pos.x - swCorner.x);
+
+	AdvectQuantityOut[Index(id)] = lerp(northLerp, southLerp, pos.y - swCorner.y);
+	Wvelocity[Index(id)] = AdvectQuantityOut[Index(id)];
+}
+
 
 [numthreads(8, 8, 1)]
 void JacobiDiffusion(uint3 id : SV_DispatchThreadID)
@@ -67,6 +88,14 @@ void JacobiDiffusion(uint3 id : SV_DispatchThreadID)
 	float2 C = Wvelocity[Index(id)];
 
 	diffusionOut[Index(id)] = (L + R + B + T + diffusionAlpha * C) * diffusionInverseBeta;
+}
+
+
+[numthreads(8, 8, 1)]
+void AddForce(uint3 id : SV_DispatchThreadID)
+{
+	float force = exp(-distance(position, id));
+	Velocity[Index(id)] += direction * force;
 }
 
 

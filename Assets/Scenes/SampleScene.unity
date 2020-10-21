@@ -164,8 +164,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   renderShader: {fileID: 7200000, guid: 976fd1cae8b4d3e4280c8bb1ccd80747, type: 3}
-  width: 256
-  height: 256
+  width: 64
+  height: 64
   viscocity: 1e-18
 --- !u!20 &519420031
 Camera:
