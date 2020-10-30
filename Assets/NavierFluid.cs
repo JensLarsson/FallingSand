@@ -141,7 +141,7 @@ public class NavierFluid : MonoBehaviour
 
         forceMultiplier = Mathf.Lerp(100, 2000, forceSlider.value);
         spread = Mathf.Lerp(2, 0.4f, forceSpreadSlider.value);
-        viscosity = Mathf.Lerp(1e-12f, 1e-03f, viscositySlider.value);
+        viscosity = Mathf.Lerp(1e-18f, 1e-03f, viscositySlider.value);
 
         if (!PauseScreen.Instance.IsPaused)
         {
@@ -150,8 +150,6 @@ public class NavierFluid : MonoBehaviour
             float dx = 1.0f / size;
             float diffAlpha = (dx * dx) / (viscosity * deltaTime);
             float jacobiInverseBeta = 1 / (4 + diffAlpha);
-
-
 
 
             //////ADVECT
@@ -187,57 +185,67 @@ public class NavierFluid : MonoBehaviour
             ////////EXTERNAL FORCES
             ///
             float scale = (float)Screen.height / size;
-            Vector2 forceDirection = new Vector2(Mathf.Sin(time), Mathf.Abs(Mathf.Cos(time)));
 
-            Vector2 forcePoint = new Vector2((float)size / 2, 1);
-            System.Threading.Tasks.Parallel.For(1, size - 1, (x) =>
+            Vector2 mousePos = Input.mousePosition / scale;
+            Vector2 forceDirection = mousePos - previousMousePos;
+            System.Threading.Tasks.Parallel.For(2, size - 2, (x) =>
             {
-                for (int y = 1; y < size - 1; y++)
+                for (int y = 2; y < size - 2; y++)
                 {
-                    float force = Mathf.Exp(-spread * Vector2.Distance(forcePoint, new Vector2(x, y)));
+                    float force = Mathf.Exp(-spread * Vector2.Distance(mousePos, new Vector2(x, y)));
                     velocity[WRITE][x, y] += forceDirection * deltaTime * force * forceMultiplier;
-                    //velocity[WRITE][x, y] += gravity * deltaTime;
+
+                    //Bounds
+                    if (x == 2) velocity[WRITE][1, y] = -velocity[WRITE][x, y] * Vector2.right;
+                    if (y == 2) velocity[WRITE][x, 1] = -velocity[WRITE][x, y] * Vector2.up;
+                    if (y == size - 3) velocity[WRITE][x, size - 2] = -velocity[WRITE][x, y] * Vector2.up;
+                    if (x == size - 3) velocity[WRITE][size - 2, y] = -velocity[WRITE][x, y] * Vector2.right;
                 }
             });
-
+            previousMousePos = mousePos;
 
 
 
             //////PROJECTION
 
             divergence = new float[size, size];
-            for (int x = 1; x < size - 1; x++)
+            System.Threading.Tasks.Parallel.For(1, size - 1, (x) =>
             {
                 for (int y = 1; y < size - 1; y++)
                 {
                     divergence[x, y] = ComputeDivergence(new Vector2Int(x, y), velocity[velocityW], size * 0.5f);
                     pressure[WRITE][x, y] = 0;
                 }
-            }
+            });
             SwapReadWrite(pressure);
             for (int i = 0; i < 30; i++)
             {
-                for (int x = 1; x < size - 1; x++)
+                System.Threading.Tasks.Parallel.For(1, size - 1, (x) =>
                 {
                     for (int y = 1; y < size - 1; y++)
                     {
                         pressure[WRITE][x, y] = Jacobi(x, y, -(dx * dx), 0.25f, pressure[READ], divergence);
                     }
-                }
+                });
                 SwapReadWrite(pressure);
             }
-            for (int x = 1; x < size - 1; x++)
+            System.Threading.Tasks.Parallel.For(1, size - 1, (x) =>
             {
                 for (int y = 1; y < size - 1; y++)
                 {
                     velocity[WRITE][x, y] -= ComputeGradient(new Vector2Int(x, y), pressure[READ]);
-                    if (x == 1) velocity[WRITE][0, y] = -velocity[WRITE][x, y];
-                    if (y == 1) velocity[WRITE][x, 0] = -velocity[WRITE][x, y];
-                    if (x == size - 2) velocity[WRITE][size - 1, y] = -velocity[WRITE][x, y];
-                    if (y == size - 2) velocity[WRITE][x, size - 1] = -velocity[WRITE][x, y];
                 }
-            }
+            });
 
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                velocity = new Vector2[3][,]
+                {
+                    new Vector2[size,size],
+                    new Vector2[size,size],
+                    new Vector2[size,size]
+                };
+            }
             SwapReadWrite(velocity);
 
             Blipper.Instance.UpdateValues(VelocityField, Quantity);

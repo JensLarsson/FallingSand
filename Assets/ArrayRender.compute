@@ -1,6 +1,7 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
+#include "UnityCG.cginc"
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
 RWTexture2D<float4> Result;
@@ -38,7 +39,10 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 	}
 	else {
 		int i = UVi.y + UVi.x * Width;
-		Result[id.xy] = float4(Velocity[i].x, Velocity[i].y, 0, 1);
+		//float f = length(Velocity[i]);
+		//Result[id.xy] = float4(f, f, f, 1);
+		Result[id.xy] = float4(Quantity[i].x, Quantity[i].y, Quantity[i].z, 1);
+
 		//Result[id.xy] = float4(float2(UVi)/Width, 1, 1);
 	}
 }
