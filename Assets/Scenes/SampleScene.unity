@@ -646,7 +646,7 @@ MonoBehaviour:
   viscosity: 0.000000001
   spread: 1
   deltaTime: 0.033
-  image: {fileID: 2800000, guid: 42cef9a9d492da34587722e7a1e341bd, type: 3}
+  image: {fileID: 2800000, guid: 3514531754616af4b969ffe777c7d429, type: 3}
   forceSlider: {fileID: 1433930830}
   forceSpreadSlider: {fileID: 1352193608}
   viscositySlider: {fileID: 1211824871}
